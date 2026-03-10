@@ -4,13 +4,12 @@ node_modules
 HELP.md 
 curl.md 
 error.log 
-prisma 
 combined.log
-index.js
-prisma.config.ts
 
 /src/generated/prisma
 
 /src/generated/prisma
+
+/generated/prisma
 
 /generated/prisma

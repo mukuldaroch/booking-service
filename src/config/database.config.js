@@ -1,4 +1,3 @@
-
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,4 +9,4 @@ dotenv.config({
     path: path.resolve(__dirname, "../../.env"),
 });
 
-export const PORT = Number(process.env.PORT);
+export const DATABASE_URL = Number(process.env.DATABASE_URL);
