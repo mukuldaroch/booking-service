@@ -13,18 +13,24 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-@Entity
-@Table(name = "bookings")
 @Data
+@Entity
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
+@Table(name = "bookings")
 public class Booking {
 
   @Id
@@ -39,17 +45,19 @@ public class Booking {
   private UUID eventId;
 
   @Column(name = "total_price", nullable = false)
-  private float totalPrice;
+  private Double totalPrice;
 
   @Column(name = "booking_status", nullable = false)
   @Enumerated(EnumType.STRING)
   private BookingStatusEnum bookingStatus;
 
   // -------------------------------------------------mappings
+
   @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<BookingItem> items = new HashSet<>();
+  private List<BookingItem> items = new ArrayList<>();
 
   // -------------------------------------------------dates
+
   @CreatedDate
   @Column(name = "created_at", updatable = false, nullable = false)
   private LocalDateTime createdAt;
@@ -67,7 +75,7 @@ public class Booking {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (!(o instanceof Booking)) return false;
-    return eventId != null && eventId.equals(((Booking) o).eventId);
+    return bookingId != null && bookingId.equals(((Booking) o).bookingId);
   }
 
   @Override

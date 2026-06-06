@@ -8,5 +8,5 @@ import lombok.Data;
 public class CreateBookingRequest {
 
   private UUID eventId;
-  List<BookingItemRequest> items;
+  private List<BookingItemRequest> items;
 }

@@ -1,19 +1,13 @@
-package com.daroch.booking.dto.ticketservice.tickettype.request;
+package com.daroch.booking.dto.ticketservice.request;
 
+import com.daroch.booking.dto.ticketservice.TicketTypeStatusEnum;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
-
-import com.daroch.booking.dto.ticketservice.tickettype.TicketTypeStatusEnum;
-
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
 public class TicketServiceCreateTicketTypeRequest {
 
   @NotNull(message = "eventId is required")

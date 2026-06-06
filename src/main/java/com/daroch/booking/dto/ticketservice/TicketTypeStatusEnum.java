@@ -1,4 +1,4 @@
-package com.daroch.booking.dto.ticketservice.tickettype;
+package com.daroch.booking.dto.ticketservice;
 
 public enum TicketTypeStatusEnum {
   DRAFT,
