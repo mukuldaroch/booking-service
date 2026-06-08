@@ -1,16 +1,19 @@
 package com.daroch.booking.client;
 
+import com.daroch.booking.dto.ErrorResponse;
 import com.daroch.booking.dto.eventservice.response.EventServiceGetEventResponse;
-import com.daroch.booking.exceptions.EventNotFoundException;
-import com.daroch.booking.exceptions.EventServiceFailedException;
+import com.daroch.booking.exceptions.BusinessException;
 import com.daroch.booking.exceptions.EventServiceUnavailableException;
+import com.daroch.booking.exceptions.ServiceFailedException;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import reactor.core.publisher.Mono;
 
 @Component
@@ -24,25 +27,39 @@ public class EventServiceClient {
     try {
       return eventServiceWebClient
           .get()
-          .uri("http://localhost:8083/events/{eventId}", eventId)
+          .uri("http://localhost:8083/event/{eventId}", eventId)
           .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt.getTokenValue())
           .retrieve()
 
           // 4xx — client & business errors
           .onStatus(
-              status -> status.value() == 404,
-              r -> Mono.error(new EventNotFoundException("Event not found")))
-
+              HttpStatusCode::is4xxClientError,
+              response ->
+                  response
+                      .bodyToMono(ErrorResponse.class)
+                      .flatMap(
+                          error ->
+                              Mono.error(
+                                  new BusinessException(
+                                      error.getErrorCode(),
+                                      error.getMessage(),
+                                      HttpStatus.valueOf(error.getStatus())))))
           // 5xx — Event Service failed
           .onStatus(
               HttpStatusCode::is5xxServerError,
-              r -> r.bodyToMono(String.class).map(EventServiceFailedException::new))
+              response ->
+                  response
+                      .bodyToMono(ErrorResponse.class)
+                      .flatMap(
+                          error ->
+                              Mono.error(
+                                  new ServiceFailedException(
+                                      error.getErrorCode(), error.getMessage()))))
           .bodyToMono(EventServiceGetEventResponse.class)
           .block();
 
-    } catch (Exception ex) {
-      ex.printStackTrace();
-      throw new EventServiceUnavailableException("Event service unreachable", ex);
+    } catch (WebClientRequestException ex) {
+      throw new EventServiceUnavailableException();
     }
   }
 }

@@ -1,117 +1,282 @@
 package com.daroch.booking.controllers;
 
-import com.daroch.booking.dto.ErrorDto;
-import com.daroch.booking.exceptions.EventNotFoundException;
-import com.daroch.booking.exceptions.EventUpdateException;
+import com.daroch.booking.dto.ErrorResponse;
+import com.daroch.booking.exceptions.BusinessException;
+import com.daroch.booking.exceptions.ServiceUnavailableException;
+import com.daroch.booking.exceptions.ValidationException;
+import com.daroch.booking.logs.LogEvent;
+import com.daroch.booking.logs.LogEventFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
-import java.util.List;
+import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.BindingResult;
-import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
-// Tells Spring this class will globally handle exceptions for REST controllers
-@Slf4j // Adds a logger named 'log' using Lombok
+@Slf4j
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+  private final LogEventFactory logEventFactory;
+  private final ObjectMapper objectMapper;
+
   /**
-   * Handles failures that occur while updating an event.
+   * Handles failures when communicating with downstream services.
    *
-   * @param ex the exception indicating the event update failed
-   * @return an error response with HTTP 400
+   * <p>This typically occurs when a dependent service is unavailable, unreachable, timed out, or
+   * returned an unexpected failure.
+   *
+   * @param ex the service availability exception
+   * @param request the current HTTP request
+   * @return standardized error response with HTTP 503 status
    */
-  @ExceptionHandler(EventUpdateException.class)
-  public ResponseEntity<ErrorDto> handleEventUpdateException(EventUpdateException ex) {
-    log.error("Caught EventUpdateException", ex);
+  @ExceptionHandler(ServiceUnavailableException.class)
+  public ResponseEntity<ErrorResponse> handleServiceUnavailable(
+      ServiceUnavailableException ex, HttpServletRequest request) {
 
-    ErrorDto errorDto = new ErrorDto();
-    errorDto.setError("Unable to update event");
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+            .errorCode("SERVICE_UNAVAILABLE")
+            .message(ex.getMessage())
+            .path(request.getRequestURI())
+            .build();
 
-    return new ResponseEntity<>(errorDto, HttpStatus.BAD_REQUEST);
+    log(logEventFactory.error(response, ex));
+
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
   }
 
   /**
-   * Handles cases where a requested event does not exist.
+   * Handles validation failures raised by custom application validation.
    *
-   * @param ex the exception indicating the event was not found
-   * @return an error response with HTTP 400
+   * <p>Used for domain-specific validation rules that are not covered by bean validation
+   * annotations.
+   *
+   * @param ex the validation exception
+   * @param request the current HTTP request
+   * @return standardized validation error response
    */
-  @ExceptionHandler(EventNotFoundException.class)
-  public ResponseEntity<ErrorDto> handleEventNotFoundException(EventNotFoundException ex) {
-    log.error("Caught EventNotFoundException", ex);
+  @ExceptionHandler(ValidationException.class)
+  public ResponseEntity<ErrorResponse> handleValidationException(
+      ValidationException ex, HttpServletRequest request) {
 
-    ErrorDto errorDto = new ErrorDto();
-    errorDto.setError("Event not found");
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(ex.getStatus().value())
+            .errorCode(ex.getErrorCode())
+            .message(ex.getMessage())
+            .path(request.getRequestURI())
+            .build();
 
-    return new ResponseEntity<>(errorDto, HttpStatus.BAD_REQUEST);
+    log(logEventFactory.warn(response, ex));
+
+    return ResponseEntity.status(ex.getStatus()).body(response);
   }
 
   /**
-   * Handles validation errors triggered by @Valid or @Validated on request bodies.
+   * Handles business rule violations.
    *
-   * @param ex the exception containing validation failure details
-   * @return an error response with HTTP 400
+   * <p>These exceptions indicate that the request is syntactically valid but violates
+   * application-specific business constraints.
+   *
+   * @param ex the business exception
+   * @param request the current HTTP request
+   * @return standardized business error response
+   */
+  @ExceptionHandler(BusinessException.class)
+  public ResponseEntity<ErrorResponse> handleBusinessException(
+      BusinessException ex, HttpServletRequest request) {
+
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(ex.getStatus().value())
+            .errorCode(ex.getErrorCode())
+            .message(ex.getMessage())
+            .path(request.getRequestURI())
+            .build();
+
+    log(logEventFactory.warn(response, ex));
+
+    return ResponseEntity.status(ex.getStatus()).body(response);
+  }
+
+  /**
+   * Handles bean validation failures triggered by @Valid.
+   *
+   * <p>Extracts the first validation error and returns it in a standardized error response.
+   *
+   * @param ex the validation exception generated by Spring
+   * @param request the current HTTP request
+   * @return standardized validation error response
    */
   @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<ErrorDto> handleMethodArgumentNotValidException(
-      MethodArgumentNotValidException ex) {
-    log.error("Caught MethodArgumentNotValidException", ex);
-
-    ErrorDto errorDto = new ErrorDto();
-
-    BindingResult bindingResult = ex.getBindingResult();
-    List<FieldError> fieldErrors = bindingResult.getFieldErrors();
+  public ResponseEntity<ErrorResponse> handleMethodArgumentNotValidException(
+      MethodArgumentNotValidException ex, HttpServletRequest request) {
 
     String errorMessage =
-        fieldErrors.stream()
+        ex.getBindingResult().getFieldErrors().stream()
             .findFirst()
-            .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
-            .orElse("Validation error occurred");
+            .map(error -> error.getField() + ": " + error.getDefaultMessage())
+            .orElse("Validation failed");
 
-    errorDto.setError(errorMessage);
-    return new ResponseEntity<>(errorDto, HttpStatus.BAD_REQUEST);
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .errorCode("VALIDATION_ERROR")
+            .message(errorMessage)
+            .path(request.getRequestURI())
+            .build();
+
+    log(logEventFactory.warn(response, ex));
+
+    return ResponseEntity.badRequest().body(response);
   }
 
   /**
-   * Handles validation errors triggered by @Validated on parameters or path variables.
+   * Handles validation failures for request parameters, path variables, and other constraint-based
+   * validations.
    *
-   * @param ex the exception containing constraint violation details
-   * @return an error response with HTTP 400
+   * <p>Extracts the first constraint violation and returns it in a standardized error response.
+   *
+   * @param ex the constraint violation exception
+   * @param request the current HTTP request
+   * @return standardized validation error response
    */
   @ExceptionHandler(ConstraintViolationException.class)
-  public ResponseEntity<ErrorDto> handleConstraintViolation(ConstraintViolationException ex) {
-    log.error("Caught ConstraintViolationException", ex);
-
-    ErrorDto errorDto = new ErrorDto();
+  public ResponseEntity<ErrorResponse> handleConstraintViolation(
+      ConstraintViolationException ex, HttpServletRequest request) {
 
     String errorMessage =
         ex.getConstraintViolations().stream()
             .findFirst()
-            .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
+            .map(v -> v.getPropertyPath() + ": " + v.getMessage())
             .orElse("Constraint violation occurred");
 
-    errorDto.setError(errorMessage);
-    return new ResponseEntity<>(errorDto, HttpStatus.BAD_REQUEST);
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .errorCode("CONSTRAINT_VIOLATION")
+            .message(errorMessage)
+            .path(request.getRequestURI())
+            .build();
+
+    log(logEventFactory.warn(response, ex));
+
+    return ResponseEntity.badRequest().body(response);
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
+      HttpMessageNotReadableException ex, HttpServletRequest request) {
+
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .errorCode("INVALID_REQUEST_BODY")
+            .message("Malformed JSON request")
+            .path(request.getRequestURI())
+            .build();
+
+    log(logEventFactory.warn(response, ex));
+
+    return ResponseEntity.badRequest().body(response);
   }
 
   /**
-   * Handles any unexpected or unhandled exceptions.
+   * Handles requests targeting endpoints that do not exist.
    *
-   * @param ex the exception that was not caught by other handlers
-   * @return an error response with HTTP 500
+   * <p>Returns a standardized 404 response instead of exposing framework-specific error details.
+   *
+   * @param ex the resource not found exception
+   * @param request the current HTTP request
+   * @return standardized error response with HTTP 404 status
+   */
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ErrorResponse> handleNoResourceFoundException(
+      NoResourceFoundException ex, HttpServletRequest request) {
+
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(HttpStatus.NOT_FOUND.value())
+            .errorCode("ENDPOINT_NOT_FOUND")
+            .message("Endpoint not found")
+            .path(request.getRequestURI())
+            .build();
+
+    log(logEventFactory.warn(response, ex));
+
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+  }
+
+  /**
+   * Handles any unexpected exception that is not explicitly caught by another exception handler.
+   *
+   * <p>Returns a generic 500 Internal Server Error response to avoid exposing implementation
+   * details to clients while ensuring the failure is captured in structured application logs.
+   *
+   * @param ex the unexpected exception
+   * @param request the current HTTP request
+   * @return standardized error response with HTTP 500 status
    */
   @ExceptionHandler(Exception.class)
-  public ResponseEntity<ErrorDto> handleException(Exception ex) {
-    log.error("Caught exception", ex);
+  public ResponseEntity<ErrorResponse> handleException(Exception ex, HttpServletRequest request) {
 
-    ErrorDto errorDto = new ErrorDto();
-    errorDto.setError("An unknown error occurred");
+    ErrorResponse response =
+        ErrorResponse.builder()
+            .timestamp(Instant.now())
+            .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+            .errorCode("INTERNAL_SERVER_ERROR")
+            .message("An unexpected error occurred")
+            .path(request.getRequestURI())
+            .build();
 
-    return new ResponseEntity<>(errorDto, HttpStatus.INTERNAL_SERVER_ERROR);
+    log(logEventFactory.error(response, ex));
+
+    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+  }
+
+  /**
+   * Serializes a {@link LogEvent} into JSON and writes it using the appropriate log level.
+   *
+   * <p>The log level defined within the {@code LogEvent} determines which SLF4J logging method is
+   * invoked (INFO, WARN, ERROR, DEBUG, or TRACE).
+   *
+   * <p>If serialization fails, a fallback error message is written to prevent the original logging
+   * operation from disrupting request processing.
+   *
+   * @param logEvent the structured log event to serialize and write
+   */
+  private void log(LogEvent logEvent) {
+    try {
+      String json = objectMapper.writeValueAsString(logEvent);
+
+      switch (logEvent.getLevel()) {
+        case INFO -> log.info(json);
+        case WARN -> log.warn(json);
+        case ERROR -> log.error(json);
+        case DEBUG -> log.debug(json);
+        case TRACE -> log.trace(json);
+      }
+
+    } catch (JsonProcessingException ex) {
+      log.error("Failed to serialize LogEvent", ex);
+    }
   }
 }

@@ -1,30 +1,19 @@
 package com.daroch.booking.exceptions;
 
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+@Getter
 public class BusinessException extends RuntimeException {
 
-  // No-arg constructor
-  public BusinessException() {
-    super();
-  }
+  private final String errorCode;
+  private final HttpStatus status;
 
-  // Constructor with message
-  public BusinessException(String message) {
+  public BusinessException(String errorCode, String message, HttpStatus status) {
+
     super(message);
-  }
 
-  // Constructor with message and cause
-  public BusinessException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  // Constructor with cause only
-  public BusinessException(Throwable cause) {
-    super(cause);
-  }
-
-  // Full constructor
-  public BusinessException(
-      String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-    super(message, cause, enableSuppression, writableStackTrace);
+    this.errorCode = errorCode;
+    this.status = status;
   }
 }

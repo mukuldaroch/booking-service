@@ -1,30 +1,10 @@
 package com.daroch.booking.exceptions;
 
-public class TicketNotFoundException extends RuntimeException {
+import org.springframework.http.HttpStatus;
 
-  // No-arg constructor
+public class TicketNotFoundException extends BusinessException {
+
   public TicketNotFoundException() {
-    super();
-  }
-
-  // Constructor with message
-  public TicketNotFoundException(String message) {
-    super(message);
-  }
-
-  // Constructor with message and cause
-  public TicketNotFoundException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  // Constructor with cause only
-  public TicketNotFoundException(Throwable cause) {
-    super(cause);
-  }
-
-  // Full constructor
-  public TicketNotFoundException(
-      String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-    super(message, cause, enableSuppression, writableStackTrace);
+    super("TICKET_NOT_FOUND", "Ticket not found", HttpStatus.NOT_FOUND);
   }
 }

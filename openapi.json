@@ -1,0 +1,110 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "OpenAPI definition", "version": "v0" },
+  "servers": [
+    { "url": "http://localhost:8085", "description": "Generated server url" }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/booking": {
+      "post": {
+        "tags": ["booking-cantroller"],
+        "summary": "Create Booking",
+        "operationId": "createBooking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateBookingRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Booking Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "*/*": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BookingItemRequest": {
+        "type": "object",
+        "properties": {
+          "ticketTypeId": { "type": "string", "format": "uuid" },
+          "quantity": { "type": "integer", "format": "int32" }
+        }
+      },
+      "CreateBookingRequest": {
+        "type": "object",
+        "properties": {
+          "eventId": { "type": "string", "format": "uuid" },
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BookingItemRequest" }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "status": { "type": "integer", "format": "int32" },
+          "errorCode": { "type": "string" },
+          "message": { "type": "string" },
+          "path": { "type": "string" }
+        }
+      },
+      "BookingItemResponse": {
+        "type": "object",
+        "properties": {
+          "bookingItemId": { "type": "string", "format": "uuid" },
+          "ticketTypeId": { "type": "string", "format": "uuid" },
+          "quantity": { "type": "integer", "format": "int32" },
+          "pricePerTicket": { "type": "number", "format": "float" }
+        }
+      },
+      "CreateBookingResponse": {
+        "type": "object",
+        "properties": {
+          "bookingId": { "type": "string", "format": "uuid" },
+          "eventId": { "type": "string", "format": "uuid" },
+          "totalPrice": { "type": "number", "format": "float" },
+          "bookingStatus": {
+            "type": "string",
+            "enum": ["PENDING", "CONFIRMED", "CANCELLED", "EXPIRED"]
+          },
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BookingItemResponse" }
+          },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
+

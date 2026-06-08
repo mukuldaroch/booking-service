@@ -1,30 +1,9 @@
 package com.daroch.booking.exceptions;
 
-public class TicketServiceUnavailableException extends RuntimeException {
+public class TicketServiceUnavailableException extends ServiceUnavailableException {
 
-  // No-arg constructor
   public TicketServiceUnavailableException() {
-    super();
+    super("EVENT_SERVICE_UNAVAILABLE", "Event Service is unavailable at the time");
   }
-
-  // Constructor with message
-  public TicketServiceUnavailableException(String message) {
-    super(message);
-  }
-
-  // Constructor with message and cause
-  public TicketServiceUnavailableException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  // Constructor with cause only
-  public TicketServiceUnavailableException(Throwable cause) {
-    super(cause);
-  }
-
-  // Full constructor
-  public TicketServiceUnavailableException(
-      String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-    super(message, cause, enableSuppression, writableStackTrace);
-  }
+  ;
 }
